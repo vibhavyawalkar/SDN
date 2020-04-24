@@ -32,10 +32,12 @@
  * @param  argv The argument list
  * @return 0 EXIT_SUCCESS
  */
+
+uint16_t CONTROL_PORT;
+
 int main(int argc, char **argv)
 {
     /*Start Here*/
-
     sscanf(argv[1], "%" SCNu16, &CONTROL_PORT);
     init(); // Initialize connection manager; This will block
 

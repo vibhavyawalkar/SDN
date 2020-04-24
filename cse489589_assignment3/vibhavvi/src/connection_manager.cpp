@@ -30,6 +30,7 @@
 
 fd_set master_list, watch_list;
 int head_fd;
+int control_socket, router_socket, data_socket;
 
 void main_loop()
 {

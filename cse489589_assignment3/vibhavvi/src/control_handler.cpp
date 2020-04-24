@@ -108,7 +108,7 @@ void remove_control_conn(int sock_index)
     close(sock_index);
 }
 
-bool isControl(int sock_index)
+boolean isControl(int sock_index)
 {
     LIST_FOREACH(connection, &control_conn_list, next)
         if(connection->sockfd == sock_index) return TRUE;
@@ -116,7 +116,7 @@ bool isControl(int sock_index)
     return FALSE;
 }
 
-bool control_recv_hook(int sock_index)
+boolean control_recv_hook(int sock_index)
 {
     char *cntrl_header, *cntrl_payload;
     uint8_t control_code;
