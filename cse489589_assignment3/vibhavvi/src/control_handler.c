@@ -56,8 +56,9 @@ int create_control_sock()
     if(sock < 0)
         ERROR("socket() failed");
 
+    int optval = 1;
     /* Make socket re-usable */
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (int[]){1}, sizeof(int)) < 0)
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval /*(int[]){1}*/, sizeof(int)) < 0)
         ERROR("setsockopt() failed");
 
     bzero(&control_addr, sizeof(control_addr));
@@ -79,7 +80,8 @@ int create_control_sock()
 
 int new_control_conn(int sock_index)
 {
-    int fdaccept, caddr_len;
+    int fdaccept; /* C code ..  caddr_len; */
+    socklen_t caddr_len;
     struct sockaddr_in remote_controller_addr;
 
     caddr_len = sizeof(remote_controller_addr);
@@ -88,7 +90,8 @@ int new_control_conn(int sock_index)
         ERROR("accept() failed");
 
     /* Insert into list of active control connections */
-    connection = malloc(sizeof(struct ControlConn));
+    /* C-code .. connection = malloc(sizeof(struct ControlConn)); */
+    connection = (struct ControlConn*)malloc(sizeof(struct ControlConn));
     connection->sockfd = fdaccept;
     LIST_INSERT_HEAD(&control_conn_list, connection, next);
 
