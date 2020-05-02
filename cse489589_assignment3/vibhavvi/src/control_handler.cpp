@@ -169,10 +169,13 @@ boolean control_recv_hook(int sock_index)
         case 0: author_response(sock_index);
                 break;
 
-        /* .......
-        case 1: init_response(sock_index, cntrl_payload);
+        case 1: do_init(cntrl_payload);
+		init_response(sock_index);
                 break;
 
+	case 2: //routing_response(sock_index);
+		break;
+	/*
             .........
            ....... 
          ......*/

@@ -42,6 +42,9 @@ void main_loop()
 
         if(selret < 0)
             ERROR("select failed.");
+	if(selret == 0) {
+	/* Timeout here, call the call back function */
+	}
 
         /* Loop through file descriptors to check which ones are ready */
         for(sock_index=0; sock_index<=head_fd; sock_index+=1){

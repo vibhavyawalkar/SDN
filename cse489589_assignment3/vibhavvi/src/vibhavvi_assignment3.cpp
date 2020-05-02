@@ -34,6 +34,8 @@
  */
 
 uint16_t CONTROL_PORT;
+uint16_t ROUTER_PORT;
+uint16_t DATA_PORT;
 
 int main(int argc, char **argv)
 {
