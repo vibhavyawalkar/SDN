@@ -137,7 +137,7 @@ void do_init(char * cntrl_payload) {
         for(int i = 0; i < noOfRouters; i++) {
                 for(int j = 0; j < noOfRouters; j++) {
                         if(i == myIndex && DVMatrix[i][j] != INF) { /* Initialize the row for this router */
-                                HopMatrix[i][j] = (j + 1); /* Since router ID starts from 1..*/
+                                HopMatrix[i][j] = routers[j].ID; //(j + 1); /* Since router ID doesn't start from 1..*/
                         } else {
                                 HopMatrix[i][j] = INF;
                         }
@@ -269,6 +269,7 @@ void routing_response(int sock_index) {
 		bytes = htons(DVMatrix[myIndex][i]);
 		memcpy(cntrl_response_payload+0x06+0x08*i, &bytes, sizeof(bytes));
 		cout << "ID:" << routers[i].ID << "|NextHopID:" << HopMatrix[myIndex][i] << "|Cost:" << DVMatrix[myIndex][i] << endl;
+		LOG_PRINT("ID:%d|NextHopID:%d|Cost:%d", routers[i].ID, HopMatrix[myIndex][i], DVMatrix[myIndex][i]);
 	}
 	/* Copy Payload */
 	memcpy(cntrl_response+CNTRL_RESP_HEADER_SIZE, cntrl_response_payload, payload_len);
