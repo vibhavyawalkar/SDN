@@ -170,10 +170,11 @@ boolean control_recv_hook(int sock_index)
                 break;
 
         case 1: do_init(cntrl_payload);
+		create_router_udp_socket();
 		init_response(sock_index);
                 break;
 
-	case 2: //routing_response(sock_index);
+	case 2: routing_response(sock_index);
 		break;
 	/*
             .........

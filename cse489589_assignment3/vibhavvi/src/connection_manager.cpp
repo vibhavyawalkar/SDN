@@ -34,12 +34,14 @@ int control_socket, router_socket, data_socket;
 
 void main_loop()
 {
+	cout << "Starting main loop " << endl;
     int selret, sock_index, fdaccept;
 
     while(TRUE){
+
         watch_list = master_list;
         selret = select(head_fd+1, &watch_list, NULL, NULL, NULL);
-
+	cout << "Select returned" << endl;
         if(selret < 0)
             ERROR("select failed.");
 	if(selret == 0) {
@@ -53,6 +55,7 @@ void main_loop()
 
                 /* control_socket */
                 if(sock_index == control_socket){
+			cout << "Connection on control socket" << endl;
                     fdaccept = new_control_conn(sock_index);
 
                     /* Add to watched socket list */
@@ -74,7 +77,23 @@ void main_loop()
                 else{
                     if(isControl(sock_index)){
                         if(!control_recv_hook(sock_index)) FD_CLR(sock_index, &master_list);
-                    }
+			if(router_socket > 0 && 
+				!FD_ISSET(router_socket, &master_list)) { /* After Init we have created router_socket */
+				/*Register the router socket */
+				FD_SET(router_socket, &master_list);
+                		if(router_socket > head_fd)
+                        		head_fd = router_socket;
+			}
+
+                	if(data_socket > 0 && 
+				!FD_ISSET(data_socket, &master_list)) {
+                		/* Register the data socket */
+                		FD_SET(data_socket, &master_list);
+                		if(data_socket > head_fd)
+                        		head_fd = data_socket;
+
+                    		}
+			}
                     //else if isData(sock_index);
                     else ERROR("Unknown socket index");
                 }
@@ -96,5 +115,7 @@ void init()
     FD_SET(control_socket, &master_list);
     head_fd = control_socket;
 
+    router_socket = -1;
+    data_socket = -1;
     main_loop();
 }

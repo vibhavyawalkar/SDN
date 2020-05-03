@@ -18,7 +18,7 @@ typedef enum {FALSE, TRUE} boolean;
 /* https://scaryreasoner.wordpress.com/2009/02/28/checking-sizeof-at-compile-time/ */
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)])) // Interesting stuff to read if you are interested to know how this works
 
-#define INF 65536
+#define INF 65535
 extern uint16_t CONTROL_PORT;
 extern uint16_t ROUTER_PORT;
 extern uint16_t DATA_PORT;
@@ -38,7 +38,10 @@ public:
 	bool neighbour;
 };
 
-vector<routerInfo> routers(5);
+extern vector<routerInfo> routers;
 
 extern uint16_t myRouterId;
+
+extern vector<vector<int>> DVmatrix;
+extern vector<vector<int>> HopMatrix;
 #endif
