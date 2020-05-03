@@ -42,6 +42,7 @@ int myIndex;
 void author_response(int sock_index)
 {
 	cout << "Entering author response" << endl;
+	LOG_PRINT("Entering author response");
 	uint16_t payload_len, response_len;
 	char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -64,10 +65,12 @@ void author_response(int sock_index)
 
 	free(cntrl_response);
 	cout << "Exiting author response" << endl;
+	LOG_PRINT("Entering author response");
 }
 
 void do_init(char * cntrl_payload) {
 	cout << "Entering do init " << endl;
+	LOG_PRINT("Entering do init");
 	uint16_t bytes; 
 	memcpy(&bytes, cntrl_payload+0x00, sizeof(noOfRouters));
 	noOfRouters = ntohs(bytes); // Network to host order
@@ -77,6 +80,8 @@ void do_init(char * cntrl_payload) {
 	cout << "Number of routers :" << noOfRouters << endl;
 	cout << "Update Interval:" << update_interval << endl;
 
+	 LOG_PRINT("Number of routers :%d", noOfRouters);
+         LOG_PRINT("Update Interval:%d", update_interval);
 	/* Populate the router information array */
 	for(int i = 0; i < noOfRouters; i++) {
 		memcpy(&bytes, cntrl_payload+0x04 + SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(bytes));
@@ -95,7 +100,13 @@ void do_init(char * cntrl_payload) {
 		cout << "Router Port:" << routers[i].router_port << "|";
 		cout << "Data Port:" << routers[i].data_port << "|";
 		cout << "Cost:" << routers[i].cost << "|";
-		cout << "IP:" << routers[i].ip << "|" << endl;		 
+		cout << "IP:" << routers[i].ip << "|" << endl;
+		LOG_PRINT("Router ID:%d", routers[i].ID);
+                LOG_PRINT("Router Info:");
+                LOG_PRINT("Router Port:%d|", routers[i].router_port);
+                LOG_PRINT("Data Port:%d|", routers[i].data_port);
+                LOG_PRINT("Cost:%d|", routers[i].cost);
+                LOG_PRINT("IP:%s|", routers[i].ip); 
 	}
 
 	/* Get this node details and set its neighbours(adjacent routers) */
@@ -146,10 +157,12 @@ void do_init(char * cntrl_payload) {
                 }
         }
 	cout << "Exiting do init" << endl;
+	LOG_PRINT("Exiting do init");
 }
 
 void init_response(int sock_index) {
 	cout << "Entering init response" << endl;
+	LOG_PRINT("Entering init response");
 	uint16_t payload_len, response_len;
 	char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -167,6 +180,7 @@ void init_response(int sock_index) {
 
 	free(cntrl_response);
 	cout<< "Exiting init response"<< endl;
+	LOG_PRINT("Exiting init response");
 }
 
 void create_router_udp_socket() {
@@ -226,6 +240,7 @@ void create_data_tcp_socket() {
 
 void routing_response(int sock_index) {
 	cout << "Entering routing response" << endl;
+	LOG_PRINT("ENtering routing response");
 	uint16_t payload_len, response_len;
 	char * cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -262,4 +277,5 @@ void routing_response(int sock_index) {
 	sendALL(sock_index, cntrl_response, response_len);
 	free(cntrl_response);
 	cout << "Exiting router response" << endl;
+	LOG_PRINT("Exiting router response");
 }
