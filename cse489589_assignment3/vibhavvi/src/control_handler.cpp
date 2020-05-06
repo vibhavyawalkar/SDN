@@ -171,6 +171,7 @@ boolean control_recv_hook(int sock_index)
 
         case 1: do_init(cntrl_payload);
 		create_router_udp_socket();
+		create_data_tcp_socket();
 		init_response(sock_index);
                 break;
 

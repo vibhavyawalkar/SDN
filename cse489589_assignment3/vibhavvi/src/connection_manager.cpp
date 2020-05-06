@@ -66,6 +66,11 @@ void main_loop()
 
     while(TRUE){
 
+	if(!FD_ISSET(router_socket, &master_list) && router_socket > 0) {
+               FD_SET(router_socket, &master_list);
+               if(router_socket > head_fd) head_fd = router_socket;
+        }
+
         watch_list = master_list;
         selret = select(head_fd+1, &watch_list, NULL, NULL, &t);
 	cout << "Select returned" << endl;
@@ -88,14 +93,15 @@ void main_loop()
 				cout << "Connection on control socket" << endl;
                     		fdaccept = new_control_conn(sock_index);
 
-                    	/* Add to watched socket list */
-                    	FD_SET(fdaccept, &master_list);
-                    	if(fdaccept > head_fd) head_fd = fdaccept;
+                    		/* Add to watched socket list */
+                    		FD_SET(fdaccept, &master_list);
+                    		if(fdaccept > head_fd) head_fd = fdaccept;
                 	}
 
                 	/* router_socket */
                 	else if(sock_index == router_socket){
-                    	//call handler that will call recvfrom() .....
+                    		//call handler that will call recvfrom() .....
+                    		LOG_PRINT("Action on router socket");
                     		struct sockaddr recvaddr;
 				socklen_t len;
 				char buffer[1024];
@@ -129,9 +135,9 @@ void main_loop()
                 	else{
                     		if(isControl(sock_index)){
                         		if(!control_recv_hook(sock_index)) FD_CLR(sock_index, &master_list);
-					if(router_socket > 0 && 
-						!FD_ISSET(router_socket, &master_list)) { /* After Init we have created router_socket */
-						/*Register the router socket */
+					/*if(router_socket > 0 && 
+						!FD_ISSET(router_socket, &master_list)) { 
+						LOG_PRINT("Registering router socket:%d", router_socket);
 						FD_SET(router_socket, &master_list);
                 				if(router_socket > head_fd)
                         				head_fd = router_socket;
@@ -139,12 +145,16 @@ void main_loop()
 
                 			if(data_socket > 0 && 
 						!FD_ISSET(data_socket, &master_list)) {
-                				/* Register the data socket */
+						LOG_PRINT("Resgitering data socket");
                 				FD_SET(data_socket, &master_list);
                 				if(data_socket > head_fd)
                         				head_fd = data_socket;
 
-                    			}
+                    			}*/
+					struct timeval inittime;
+					gettimeofday(&inittime, NULL);
+					routers[myIndex].nextUpdateTime = inittime.tv_sec + update_interval;
+					LOG_PRINT("INIT time : %s, Update Interval: %d", to_string(inittime.tv_sec).c_str(), update_interval);
 				}	
                     		/* else if isData(sock_index) {
  				 * }
@@ -157,7 +167,7 @@ void main_loop()
 
 	t.tv_sec = mostRecentTimeout();
         t.tv_usec = 0;
-	LOG_PRINT("Most recent timeout for select is:%d", t.tv_sec);
+	LOG_PRINT("Most recent timeout for select is:%s", to_string(t.tv_sec).c_str());
     } /*Infinite while loop for select*/
 }
 
@@ -191,7 +201,7 @@ time_t mostRecentTimeout() {
 	for(int i = 0; i < noOfRouters; i++) {
 		if(routers[i].nextUpdateTime - timenow.tv_sec < ret
 		&& routers[i].nextUpdateTime - timenow.tv_sec > 0) {
-			ret = routers[i].nextUpdateTime;
+			ret = routers[i].nextUpdateTime - timenow.tv_sec;
 		}
 	}
 	return ret;
@@ -208,6 +218,8 @@ void sendDVtoNeighbours() {
 			addr.sin_addr.s_addr = routers[i].ip; // Need to check conversion for this IP
 			addr.sin_port = htons(routers[i].router_port);
 			string dv = getDV();
+			string ip_(routers[i].ipPrintable);
+			LOG_PRINT("Sending DV string:%s to IP:%s", dv.c_str(), ip_.c_str());
 			sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
 		}
 	}
@@ -219,8 +231,8 @@ string getDV() {
 		s = s + " ";
 		s = s + to_string(DVMatrix[myIndex][i]);
 	}
-	cout << "DV string:" << s.c_str();
-	LOG_PRINT("DV String %s:", s.c_str());
+	//cout << "DV string:" << s.c_str();
+	//LOG_PRINT("DV String :%s", s.c_str());
 	return s;
 }
 
@@ -343,6 +355,8 @@ void do_init(char * cntrl_payload) {
                         cout << "HoP[" << i << "][" << j << "]:" << HopMatrix[i][j] << endl;
                 }
         }
+
+
         cout << "Exiting do init" << endl;
         LOG_PRINT("Exiting do init");
 }
@@ -412,5 +426,66 @@ void routing_response(int sock_index) {
         free(cntrl_response);
         cout << "Exiting router response" << endl;
         LOG_PRINT("Exiting router response");
+}
+
+void create_data_tcp_socket() {
+        int sock;
+        struct sockaddr_in data_addr;
+        socklen_t addrlen = sizeof(data_addr);
+
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if(sock < 0)
+                ERROR("socket() failed");
+
+        int optval = 1;
+        /* Make socket re-usable */
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval /*(int[]){1}*/, sizeof(int)) < 0)
+                ERROR("setsockopt() failed");
+
+        bzero(&data_addr, sizeof(data_addr));
+
+        data_addr.sin_family = AF_INET;
+        data_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        data_addr.sin_port = htons(DATA_PORT);
+
+        if(bind(sock, (struct sockaddr*)&data_addr, sizeof(data_addr)) < 0)
+                ERROR("bind() failed");
+
+        if(listen(sock, 5) < 0)
+                ERROR("listen failed()");
+
+        data_socket = sock;
+}
+
+void create_router_udp_socket() {
+        int sock;
+        struct sockaddr_in router_addr;
+        socklen_t addrlen = sizeof(router_addr);
+
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(sock < 0)
+                ERROR("socket() failed");
+
+        int optval = 1;
+        /* Make socket re-usable */
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval /*(int[]){1}*/, sizeof(int)) < 0)
+                ERROR("setsockopt() failed");
+
+        bzero(&router_addr, sizeof(router_addr));
+
+        router_addr.sin_family = AF_INET;
+        router_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        router_addr.sin_port = htons(ROUTER_PORT);
+
+	LOG_PRINT("Router port:%d, %d", ROUTER_PORT, routers[myIndex].router_port);
+        if(bind(sock, (struct sockaddr*)&router_addr, sizeof(router_addr)) < 0)
+                ERROR("bind() failed");
+
+        router_socket = sock;
+	FD_SET(router_socket, &master_list);
+	if(router_socket > head_fd)
+		head_fd = router_socket;
+
+	LOG_PRINT("Router_socket:%d", router_socket);
 }
 
