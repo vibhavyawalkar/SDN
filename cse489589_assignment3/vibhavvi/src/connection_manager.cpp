@@ -73,6 +73,7 @@ void main_loop()
             ERROR("select failed.");
 	if(selret == 0) {
 	/* Timeout here, call the call back function */
+		LOG_PRINT("Select timed out");
 		localTimeoutHandler();
 		timeOutHandler();
 	} else {
@@ -156,6 +157,7 @@ void main_loop()
 
 	t.tv_sec = mostRecentTimeout();
         t.tv_usec = 0;
+	LOG_PRINT("Most recent timeout for select is:%d", t.tv_sec);
     } /*Infinite while loop for select*/
 }
 
