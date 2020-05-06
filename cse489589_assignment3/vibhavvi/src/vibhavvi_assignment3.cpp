@@ -50,6 +50,14 @@ FILE *fp ;
 static int SESSION_TRACKER; //Keeps track of session
 std::string logname = "/tmp/vib_";
 
+uint16_t noOfRouters, update_interval, myRouterID;
+vector<routerInfo> routers(5);
+vector<vector<uint16_t>> DVMatrix(5, vector<uint16_t>(5,0));
+vector<vector<int>> HopMatrix(5, vector<int>(5,0));
+
+int myIndex;
+
+
 
 char* print_time()
 {

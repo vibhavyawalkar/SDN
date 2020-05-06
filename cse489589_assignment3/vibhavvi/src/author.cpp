@@ -106,7 +106,9 @@ void do_init(char * cntrl_payload) {
                 LOG_PRINT("Router Port:%d|", routers[i].router_port);
                 LOG_PRINT("Data Port:%d|", routers[i].data_port);
                 LOG_PRINT("Cost:%d|", routers[i].cost);
-                LOG_PRINT("IP:%s|", routers[i].ip); 
+                LOG_PRINT("IP:%s|", routers[i].ip);
+		routers[i].nextUpdateTime = update_interval;
+		routers[i].noOfTimeouts = 3; 
 	}
 
 	/* Get this node details and set its neighbours(adjacent routers) */

@@ -38,7 +38,10 @@ public:
 	uint16_t cost;
 	char ip[INET_ADDRSTRLEN];
 	//uint32_t ip;
-	bool neighbour;
+	bool neighbour; /* If cost to a router is infinity then its not a neighbour */
+	time_t nextUpdateTime;
+	int noOfTimeouts; /* If we don't receive updates for 3 consecutive timeouts, we consider that 
+			   * router as failed */
 };
 
 extern vector<routerInfo> routers;
