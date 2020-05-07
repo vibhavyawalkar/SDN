@@ -54,8 +54,9 @@ void init();
 void timeOutHandler();
 void localTimeoutHandler();
 time_t mostRecentTimeout();
+void sendDVtoNeighbours();
 std::string getDV();
-
+char * routing_update();
 void main_loop()
 {
 	cout << "Starting main loop " << endl;
@@ -65,13 +66,14 @@ void main_loop()
 	t.tv_usec = 0;
 
     while(TRUE){
-
-	if(!FD_ISSET(router_socket, &master_list) && router_socket > 0) {
+	
+	if(router_socket > 0) {
+		LOG_PRINT("Setting router socket in main loop");
                FD_SET(router_socket, &master_list);
                if(router_socket > head_fd) head_fd = router_socket;
         }
 
-        watch_list = master_list;
+       	watch_list = master_list;
         selret = select(head_fd+1, &watch_list, NULL, NULL, &t);
 	cout << "Select returned" << endl;
         if(selret < 0)
@@ -80,14 +82,16 @@ void main_loop()
 	/* Timeout here, call the call back function */
 		LOG_PRINT("Select timed out");
 		localTimeoutHandler();
-		timeOutHandler();
-	} else {
+		//timeOutHandler();
+		//continue;
+	} //else {
+		//sendDVtoNeighbours();
 
         	/* Loop through file descriptors to check which ones are ready */
         	for(sock_index=0; sock_index<=head_fd; sock_index+=1){
 
             	if(FD_ISSET(sock_index, &watch_list)){
-
+			LOG_PRINT("Sock_index:%d", sock_index);
                 	/* control_socket */
                 	if(sock_index == control_socket){
 				cout << "Connection on control socket" << endl;
@@ -103,11 +107,12 @@ void main_loop()
                     		//call handler that will call recvfrom() .....
                     		LOG_PRINT("Action on router socket");
                     		struct sockaddr recvaddr;
-				socklen_t len;
-				char buffer[1024];
-				memset(buffer, '\0', 1024);
+				socklen_t len = sizeof(recvaddr);
+				
+				char *buffer = (char*)malloc(68);
+				memset(buffer, 0, 68);
 				string str = "";
-				recvfrom(router_socket, buffer, sizeof(buffer), 0, &recvaddr, &len);
+				recvfrom(sock_index, buffer, 68, 0, &recvaddr, &len);
 				str = std::string(buffer);
 				std::size_t pos = str.find(" ");
 				string index_ = str.substr(0, pos);
@@ -134,6 +139,7 @@ void main_loop()
                 	/* Existing connection */
                 	else{
                     		if(isControl(sock_index)){
+					LOG_PRINT("Connection control socket");
                         		if(!control_recv_hook(sock_index)) FD_CLR(sock_index, &master_list);
 					/*if(router_socket > 0 && 
 						!FD_ISSET(router_socket, &master_list)) { 
@@ -150,11 +156,26 @@ void main_loop()
                 				if(data_socket > head_fd)
                         				head_fd = data_socket;
 
-                    			}*/
+                    			}*//*
 					struct timeval inittime;
 					gettimeofday(&inittime, NULL);
 					routers[myIndex].nextUpdateTime = inittime.tv_sec + update_interval;
 					LOG_PRINT("INIT time : %s, Update Interval: %d", to_string(inittime.tv_sec).c_str(), update_interval);
+					//sendDVtoNeighbours();
+					*//*
+					for(int i = 0; i < noOfRouters; i++) {
+						if(myIndex != i) {
+							struct sockaddr_in addr;
+                        				bzero(&addr, sizeof(addr));
+                        				addr.sin_family = AF_INET;
+                        				addr.sin_addr.s_addr = routers[i].ip;
+                        				addr.sin_port = htons(routers[i].router_port);
+                        				string dv = getDV();
+                        				string ip_(routers[i].ipPrintable);
+                        				LOG_PRINT("Sending DV string:%s to IP:%s", dv.c_str(), ip_.c_str());
+                        				sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
+						}
+					}*/
 				}	
                     		/* else if isData(sock_index) {
  				 * }
@@ -163,9 +184,9 @@ void main_loop()
                 	}
             	} /* End of FD_ISSET */
 		} /* End of for loop for sock_index */
-	} /* End of else for selret = 0 */
+	//} /* End of else for selret = 0 */
 
-	t.tv_sec = mostRecentTimeout();
+	t.tv_sec = update_interval;// mostRecentTimeout();
         t.tv_usec = 0;
 	LOG_PRINT("Most recent timeout for select is:%s", to_string(t.tv_sec).c_str());
     } /*Infinite while loop for select*/
@@ -215,12 +236,18 @@ void sendDVtoNeighbours() {
 			struct sockaddr_in addr;
 			bzero(&addr, sizeof(addr));
 			addr.sin_family = AF_INET;	
-			addr.sin_addr.s_addr = routers[i].ip; // Need to check conversion for this IP
+			addr.sin_addr.s_addr = routers[i].ip; /*Need to check conversion for this IP*/
 			addr.sin_port = htons(routers[i].router_port);
-			string dv = getDV();
+			//string dv = getDV();
 			string ip_(routers[i].ipPrintable);
-			LOG_PRINT("Sending DV string:%s to IP:%s", dv.c_str(), ip_.c_str());
-			sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
+			//LOG_PRINT("Sending DV string:%s to IP:%s:%d", dv.c_str(), ip_.c_str(), routers[i].router_port);
+			LOG_PRINT("Sending routing update to IP:%s:%d", ip_.c_str(), routers[i].router_port);
+			char *routing_packet = routing_update();
+			//sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
+			//LOG_PRINT("Size of routing update packet:%d", sizeof(routing_packet));
+			int sent_bytes = sendto(router_socket, routing_packet, 68, 0, (struct sockaddr*)&addr, sizeof(addr));
+			LOG_PRINT("Bytes sent in routing update:%d", sent_bytes);
+			free(routing_packet);
 		}
 	}
 }
@@ -304,7 +331,7 @@ void do_init(char * cntrl_payload) {
                 LOG_PRINT("Data Port:%d|", routers[i].data_port);
                 LOG_PRINT("Cost:%d|", routers[i].cost);
                 LOG_PRINT("IP:%s|", routers[i].ipPrintable);
-                routers[i].nextUpdateTime = update_interval;
+                routers[i].nextUpdateTime = 0;
                 routers[i].noOfTimeouts = 3;
         }
 
@@ -359,8 +386,44 @@ void do_init(char * cntrl_payload) {
 
         cout << "Exiting do init" << endl;
         LOG_PRINT("Exiting do init");
+	struct timeval inittime;
+        gettimeofday(&inittime, NULL);
+        routers[myIndex].nextUpdateTime = inittime.tv_sec + update_interval;
+        LOG_PRINT("INIT time : %s, Update Interval: %d", to_string(inittime.tv_sec).c_str(), update_interval);
+
 }
 
+char * routing_update() {
+	uint16_t payload_len = 68;
+	char *payload = (char*) malloc(payload_len);
+	LOG_PRINT("Size of payload : %d", sizeof(payload));
+	uint16_t bytes;
+	bytes = htons(noOfRouters);
+	
+	memcpy(payload+0x00, &bytes, sizeof(bytes));
+
+	bytes = htons(routers[myIndex].router_port);
+	memcpy(payload+0x02, &bytes, sizeof(bytes));
+	uint32_t fourBytes;
+	fourBytes = routers[myIndex].ip;
+	memcpy(payload+0x04, &fourBytes, sizeof(fourBytes));
+
+	for(int i = 0; i < noOfRouters; i++) {
+		fourBytes = routers[i].ip; /* no need to convert here*/
+		memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i, &fourBytes, sizeof(fourBytes));
+		bytes = htons(routers[i].router_port);
+		memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x04, &bytes, sizeof(bytes));
+
+		bytes = htons(routers[i].ID);
+                memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x08, &bytes, sizeof(bytes));
+
+		bytes = htons(routers[i].cost);
+		memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x0a, &bytes, sizeof(bytes));
+	}
+
+	return payload;
+
+}
 
 void init_response(int sock_index) {
         cout << "Entering init response" << endl;
@@ -482,10 +545,10 @@ void create_router_udp_socket() {
                 ERROR("bind() failed");
 
         router_socket = sock;
-	FD_SET(router_socket, &master_list);
+	/*FD_SET(router_socket, &master_list);
 	if(router_socket > head_fd)
 		head_fd = router_socket;
-
+	*/
 	LOG_PRINT("Router_socket:%d", router_socket);
 }
 
