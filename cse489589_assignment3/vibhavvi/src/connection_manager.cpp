@@ -57,6 +57,8 @@ time_t mostRecentTimeout();
 void sendDVtoNeighbours();
 std::string getDV();
 char * routing_update();
+void handle_crash(int);
+
 void main_loop()
 {
 	cout << "Starting main loop " << endl;
@@ -446,6 +448,30 @@ void init_response(int sock_index) {
         free(cntrl_response);
         cout<< "Exiting init response"<< endl;
         LOG_PRINT("Exiting init response");
+}
+
+void handle_crash(int sock_index) {
+	cout << "Entering handle crash" << endl;
+	LOG_PRINT("Entering handle crash");
+	uint16_t payload_len, response_len;
+	char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
+
+	payload_len = 0; /* No payload for crash response */
+
+	cntrl_response_header = create_response_header(sock_index, 4, 0, payload_len);
+
+	response_len = CNTRL_RESP_HEADER_SIZE+payload_len;
+	cntrl_response = (char*) malloc(response_len);
+	/*Copy Header */
+	memcpy(cntrl_response, cntrl_response_header, CNTRL_RESP_HEADER_SIZE);
+	free(cntrl_response_header);
+
+	sendALL(sock_index, cntrl_response, response_len);
+
+	free(cntrl_response);
+	cout << "Exiting handle crash" << endl;
+	LOG_PRINT("Exiting handle crash");
+	exit(0); /* Terminate the router process */
 }
 
 void routing_response(int sock_index) {

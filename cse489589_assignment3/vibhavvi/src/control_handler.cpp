@@ -177,6 +177,10 @@ boolean control_recv_hook(int sock_index)
 
 	case 2: routing_response(sock_index);
 		break;
+                  
+	case 4:
+                handle_crash(sock_index);
+		break;
 	/*
             .........
            ....... 

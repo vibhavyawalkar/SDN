@@ -10,5 +10,5 @@ void create_router_udp_socket();
 void create_data_tcp_socket();
 
 void routing_response(int sock_index);
-
+void handle_crash(int sock_index);
 #endif
