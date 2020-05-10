@@ -32,8 +32,6 @@
 
 void author_response(int sock_index)
 {
-	cout << "Entering author response" << endl;
-	LOG_PRINT("Entering author response");
 	uint16_t payload_len, response_len;
 	char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -55,6 +53,4 @@ void author_response(int sock_index)
 	sendALL(sock_index, cntrl_response, response_len);
 
 	free(cntrl_response);
-	cout << "Exiting author response" << endl;
-	LOG_PRINT("Entering author response");
 }

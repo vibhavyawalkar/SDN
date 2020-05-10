@@ -43,12 +43,7 @@ uint16_t CONTROL_PORT;
 uint16_t ROUTER_PORT;
 uint16_t DATA_PORT;
 
-void log_print(char* filename, int line, char *fmt,...);
-#define LOG_PRINT(...) log_print(__FILE__, __LINE__, __VA_ARGS__ )
 
-FILE *fp ;
-static int SESSION_TRACKER; //Keeps track of session
-std::string logname = "/tmp/vib_";
 
 /*
 uint16_t noOfRouters, update_interval, myRouterID;
@@ -60,81 +55,6 @@ int myIndex;
 */
 
 
-char* print_time()
-{
-    int size = 0;
-    time_t t;
-    char *buf;
-
-    t=time(NULL); /* get current calendar time */
-
-    char *timestr = asctime( localtime(&t) );
-    timestr[strlen(timestr) - 1] = 0;  //Getting rid of \n
-
-    size = strlen(timestr)+ 1 + 2; //Additional +2 for square braces
-    buf = (char*)malloc(size);
-
-    memset(buf, 0x0, size);
-    snprintf(buf,size,"[%s]", timestr);
-
-    return buf;
-}
-
-void log_print(char* filename, int line, char *fmt,...)
-{
-    va_list         list;
-    char            *p, *r;
-    int             e;
-
-
-    if(SESSION_TRACKER > 0)
-      fp = fopen (logname.c_str(),"a+");
-    else {
-      fp = fopen (logname.c_str(),"w");
-    }
-    fprintf(fp,"%s ",print_time());
-    fprintf(fp,"[%s][line: %d] ",filename,line);
-    va_start( list, fmt );
-
-    for ( p = fmt ; *p ; ++p )
-    {
-        if ( *p != '%' )//If simple string
-        {
-            fputc( *p,fp );
-        }
-        else
-        {
-            switch ( *++p )
-            {
-                /* string */
-            case 's':
-            {
-                r = va_arg( list, char * );
-
-                fprintf(fp,"%s", r);
-                continue;
-            }
-
-            /* integer */
-            case 'd':
-            {
-                e = va_arg( list, int );
-
-                fprintf(fp,"%d", e);
-                continue;
-            }
-
-            default:
-                fputc( *p, fp );
-            }
-        }
-    }
-    va_end( list );
-    fputc( '\n', fp );
-    SESSION_TRACKER++;
-    fclose(fp);
-}
-
 int main(int argc, char **argv)
 {
     /*Start Here*/
@@ -145,9 +65,9 @@ vector<vector<int>> HopMatrix(5, vector<int>(5,0));
 
 int myIndex;
 
-	logname += std::to_string(getpid());
+	//logname += std::to_string(getpid());
     sscanf(argv[1], "%" SCNu16, &CONTROL_PORT);
-	LOG_PRINT("Initialize in main");
+//	LOG_PRINT("Initialize in main");
     init(); // Initialize connection manager; This will block
 
     return 0;
