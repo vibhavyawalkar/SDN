@@ -59,7 +59,7 @@ void sendDVtoNeighbours();
 std::string getDV();
 char * routing_update();
 void handle_crash(int);
-
+void updateRoutingTable(int sock_index);
 void main_loop()
 {
 	//cout << "Starting main loop " << endl;
@@ -84,9 +84,30 @@ void main_loop()
 	if(selret == 0) {
 	/* Timeout here, call the call back function */
 		//LOG_PRINT("Select timed out");
-		localTimeoutHandler();
-		//timeOutHandler();
-		//continue;
+		if(router_socket > 0) {
+		       for(int i = 0; i < noOfRouters; i++) {
+                	if(routers[i].neighbour == true && i != myIndex) {
+
+
+                        	struct sockaddr_in addr;
+                        	bzero((char*)&addr, sizeof(addr));
+                        	addr.sin_family = AF_INET;
+				uint32_t r_ip = htonl(routers[i].ip);
+				memcpy(&addr.sin_addr.s_addr, &r_ip, 4);
+                        	//addr.sin_addr.s_addr = htonl(routers[i].ip); /*Need to check conversion for this IP*/
+                        	//addr.sin_port = htons(routers[i].router_port);
+                        	uint16_t r_port = htons(routers[i].router_port);
+				addr.sin_port = r_port;
+                        	string ip_(routers[i].ipPrintable);
+                        	char *routing_packet = routing_update();
+				socklen_t len = sizeof(addr);
+                        	int sent_bytes = sendto(router_socket, routing_packet, 68, 0, (struct sockaddr*)&addr, len);
+                        	//LOG_PRINT("Bytes sent in routing update:%d to %s", sent_bytes, routers[i].ipPrintable);
+                        	free(routing_packet);
+                	}
+        		}
+		}
+
 	} //else {
 		//sendDVtoNeighbours();
 
@@ -109,29 +130,7 @@ void main_loop()
                 	else if(sock_index == router_socket){
                     		//call handler that will call recvfrom() .....
                     		//LOG_PRINT("Action on router socket");
-                    		struct sockaddr recvaddr;
-				socklen_t len = sizeof(recvaddr);
-				
-				char *buffer = (char*)malloc(68);
-				memset(buffer, 0, 68);
-				string str = "";
-				recvfrom(sock_index, buffer, 68, 0, &recvaddr, &len);
-				str = std::string(buffer);
-				std::size_t pos = str.find(" ");
-				string index_ = str.substr(0, pos);
-				int index = stoi(index_);
-				struct timeval timenow;
-				gettimeofday(&timenow, NULL);
-
-				routers[index].nextUpdateTime = timenow.tv_sec + update_interval;
-				routers[index].noOfTimeouts = 3;
-
-/*				cout << "Message received from ID: " << routers[index].ID <<
-					" Msg:" << str.c_str() << endl;*/
-				//LOG_PRINT("Message received from ID: %d, Msg:%s", routers[index].ID, str.c_str());
-			
-				// Process the message received	
-                     
+				updateRoutingTable(sock_index);
                 	}
 
                 	/* data_socket */
@@ -144,41 +143,6 @@ void main_loop()
                     		if(isControl(sock_index)){
 					//LOG_PRINT("Connection control socket");
                         		if(!control_recv_hook(sock_index)) FD_CLR(sock_index, &master_list);
-					/*if(router_socket > 0 && 
-						!FD_ISSET(router_socket, &master_list)) { 
-						LOG_PRINT("Registering router socket:%d", router_socket);
-						FD_SET(router_socket, &master_list);
-                				if(router_socket > head_fd)
-                        				head_fd = router_socket;
-					}
-
-                			if(data_socket > 0 && 
-						!FD_ISSET(data_socket, &master_list)) {
-						LOG_PRINT("Resgitering data socket");
-                				FD_SET(data_socket, &master_list);
-                				if(data_socket > head_fd)
-                        				head_fd = data_socket;
-
-                    			}*//*
-					struct timeval inittime;
-					gettimeofday(&inittime, NULL);
-					routers[myIndex].nextUpdateTime = inittime.tv_sec + update_interval;
-					LOG_PRINT("INIT time : %s, Update Interval: %d", to_string(inittime.tv_sec).c_str(), update_interval);
-					//sendDVtoNeighbours();
-					*//*
-					for(int i = 0; i < noOfRouters; i++) {
-						if(myIndex != i) {
-							struct sockaddr_in addr;
-                        				bzero(&addr, sizeof(addr));
-                        				addr.sin_family = AF_INET;
-                        				addr.sin_addr.s_addr = routers[i].ip;
-                        				addr.sin_port = htons(routers[i].router_port);
-                        				string dv = getDV();
-                        				string ip_(routers[i].ipPrintable);
-                        				LOG_PRINT("Sending DV string:%s to IP:%s", dv.c_str(), ip_.c_str());
-                        				sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
-						}
-					}*/
 				}	
                     		/* else if isData(sock_index) {
  				 * }
@@ -193,6 +157,83 @@ void main_loop()
         t.tv_usec = 0;
 	//LOG_PRINT("Most recent timeout for select is:%s", to_string(t.tv_sec).c_str());
     } /*Infinite while loop for select*/
+}
+
+void updateRoutingTable(int sock_index) {
+	struct sockaddr recvaddr;
+	socklen_t len = sizeof(recvaddr);
+
+      	char *buffer = (char*)malloc(68);
+     	memset(buffer, 0, 68);
+        string str = "";
+        recvfrom(sock_index, buffer, 68, 0, &recvaddr, &len);
+
+	vector<routerInfo> receivedRouterInfo(5);
+
+	uint16_t bytes;
+        memcpy(&bytes, buffer+0x00, sizeof(bytes));
+        uint16_t noOfUpdateFields = ntohs(bytes); // Network to host order
+	//LOG_PRINT("Number of Update fields:%d", noOfUpdateFields);
+        memcpy(&bytes, buffer+0x02, sizeof(bytes));
+        uint16_t source_port = ntohs(bytes);
+	//LOG_PRINT("Source Port:%d", source_port);
+
+        uint32_t fourBytes;
+
+        for(int i = 0; i < noOfUpdateFields; i++) {
+
+                memcpy(&fourBytes, buffer+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(fourBytes));
+		inet_ntop(AF_INET, &fourBytes, receivedRouterInfo[i].ipPrintable, INET_ADDRSTRLEN);
+		memcpy(&receivedRouterInfo[i].ip, buffer+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(receivedRouterInfo[i].ip));
+                memcpy(&bytes, buffer+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x04, sizeof(bytes));
+		receivedRouterInfo[i].router_port = ntohs(bytes);
+
+                memcpy(&bytes, buffer+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x08, sizeof(bytes));
+		receivedRouterInfo[i].ID = ntohs(bytes);
+
+                memcpy(&bytes, buffer+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x0a, sizeof(bytes));
+		receivedRouterInfo[i].cost = ntohs(bytes);
+		//LOG_PRINT("IP:%s|Router_port:%d|Router ID:%d|Cost:%d", receivedRouterInfo[i].ipPrintable, receivedRouterInfo[i].router_port, receivedRouterInfo[i].ID, receivedRouterInfo[i].cost);
+        }
+
+	uint16_t source_cost = 0;
+	uint16_t source_id = 0;
+	for(int i = 0; i < noOfRouters; i++) {
+		if(source_port == routers[i].router_port) {
+			source_cost = routers[i].cost;
+			source_id = routers[i].ID;
+		}
+	}
+
+	//LOG_PRINT("Source ID:%d, source cost:%d", source_id, source_cost);
+
+	for(int i = 0; i < noOfRouters; i++) {
+		for(int j = 0; j < noOfUpdateFields; j++) {
+			if(routers[i].ID == receivedRouterInfo[j].ID) {
+				if(routers[i].cost > source_cost + receivedRouterInfo[j].cost)
+				{
+					routers[i].cost = source_cost + receivedRouterInfo[j].cost;
+					routers[i].nexthop = source_id; 
+				}
+				break;
+			}
+		}
+	}
+
+	//LOG_PRINT("Updated Routing Table");
+	for(int i = 0; i < noOfRouters; i++) {
+		//LOG_PRINT("ID:%d|Cost:%d|Hop:%d", routers[i].ID, routers[i].cost, routers[i].nexthop);
+	}
+	
+	free(buffer);	
+	/* Update the timeouts for the RID from which the update is received 
+	struct timeval timenow;
+	gettimeofday(&timenow, NULL);
+
+	routers[index].nextUpdateTime = timenow.tv_sec + update_interval;
+	routers[index].noOfTimeouts = 3;
+	*/
+	//LOG_PRINT("Message received from ID: %d, Msg:%s", routers[index].ID, str.c_str());
 }
 
 void init()
@@ -236,34 +277,20 @@ time_t mostRecentTimeout() {
 void sendDVtoNeighbours() {
 	for(int i = 0; i < noOfRouters; i++) {
 		if(routers[i].neighbour == true && i != myIndex) {
+
+			
 			struct sockaddr_in addr;
 			bzero(&addr, sizeof(addr));
 			addr.sin_family = AF_INET;	
-			addr.sin_addr.s_addr = routers[i].ip; /*Need to check conversion for this IP*/
+			addr.sin_addr.s_addr = htonl(routers[i].ip); /*Need to check conversion for this IP*/
 			addr.sin_port = htons(routers[i].router_port);
-			//string dv = getDV();
 			string ip_(routers[i].ipPrintable);
-			//LOG_PRINT("Sending DV string:%s to IP:%s:%d", dv.c_str(), ip_.c_str(), routers[i].router_port);
-			//LOG_PRINT("Sending routing update to IP:%s:%d", ip_.c_str(), routers[i].router_port);
 			char *routing_packet = routing_update();
-			//sendto(router_socket, dv.c_str(), dv.length(), 0, (struct sockaddr*)&addr, sizeof(addr));
-			//LOG_PRINT("Size of routing update packet:%d", sizeof(routing_packet));
 			int sent_bytes = sendto(router_socket, routing_packet, 68, 0, (struct sockaddr*)&addr, sizeof(addr));
-			//LOG_PRINT("Bytes sent in routing update:%d", sent_bytes);
+			//LOG_PRINT("Bytes sent in routing update:%d to %s", sent_bytes, routers[i].ipPrintable);
 			free(routing_packet);
 		}
 	}
-}
-
-string getDV() {
-	string s = to_string(myIndex); // Can send ROuterID here
-	for(int i = 0; i < noOfRouters; i++) {
-		s = s + " ";
-		s = s + to_string(DVMatrix[myIndex][i]);
-	}
-	//cout << "DV string:" << s.c_str();
-	//LOG_PRINT("DV String :%s", s.c_str());
-	return s;
 }
 
 void localTimeoutHandler() {
@@ -319,20 +346,25 @@ void do_init(char * cntrl_payload) {
                 memcpy(&bytes, cntrl_payload+0x0a + SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(bytes));
                 routers[i].cost = ntohs(bytes);
                 uint32_t fourBytes;
-                memcpy(&routers[i].ip, cntrl_payload+0x0c + SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(routers[i].ip));
+                //memcpy(&routers[i].ip, cntrl_payload+0x0c + SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(routers[i].ip));
                 memcpy(&fourBytes, cntrl_payload+0x0c + SIZE_OF_ONE_ROUTER_ENTRY*i, sizeof(fourBytes));
+		routers[i].ip = ntohl(fourBytes);
                 inet_ntop(AF_INET, &fourBytes, routers[i].ipPrintable, INET_ADDRSTRLEN);
+
+		if(routers[i].cost == INF)
+                        routers[i].nexthop = INF;
+                else
+                        routers[i].nexthop = routers[i].ID;
+
                 /*cout << "Router ID:" << routers[i].ID << endl;
                 cout << "Router Info:" << endl;
                 cout << "Router Port:" << routers[i].router_port << "|";
                 cout << "Data Port:" << routers[i].data_port << "|";
                 cout << "Cost:" << routers[i].cost << "|";
                 cout << "IP:" << routers[i].ipPrintable << "|" << endl; */
-                /*LOG_PRINT("Router ID:%d", routers[i].ID);
-                LOG_PRINT("Router Info:");
-                LOG_PRINT("Router Port:%d|", routers[i].router_port);
-                LOG_PRINT("Data Port:%d|", routers[i].data_port);
-                LOG_PRINT("Cost:%d|", routers[i].cost);
+                /*LOG_PRINT("Router Info:");
+                LOG_PRINT("Router Port:%d|Data Port:%d|", routers[i].router_port, routers[i].data_port);
+                LOG_PRINT("Router ID:%d|Cost:%d|NextHop:%d",routers[i].ID, routers[i].cost, routers[i].nexthop);
                 LOG_PRINT("IP:%s|", routers[i].ipPrintable); */
                 routers[i].nextUpdateTime = 0;
                 routers[i].noOfTimeouts = 3;
@@ -373,35 +405,18 @@ void do_init(char * cntrl_payload) {
                 }
         }
 
-
-        for(int i = 0; i < noOfRouters; i++) {
-                for(int j = 0; j < noOfRouters; j++) {
-                        //cout << "DV[" << i << "][" << j << "]:" << DVMatrix[i][j] << endl;
-                }
-        }
-
-        for(int i = 0; i < noOfRouters; i++) {
-                for(int j = 0; j < noOfRouters; j++) {
-                        //cout << "HoP[" << i << "][" << j << "]:" << HopMatrix[i][j] << endl;
-                }
-        }
-
-
-        //cout << "Exiting do init" << endl;
-        //LOG_PRINT("Exiting do init");
 	struct timeval inittime;
         gettimeofday(&inittime, NULL);
         routers[myIndex].nextUpdateTime = inittime.tv_sec + update_interval;
-        //LOG_PRINT("INIT time : %s, Update Interval: %d", to_string(inittime.tv_sec).c_str(), update_interval);
 
 }
 
 char * routing_update() {
 	uint16_t payload_len = 68;
 	char *payload = (char*) malloc(payload_len);
-	//LOG_PRINT("Size of payload : %d", sizeof(payload));
 
-	bzero(payload, payload_len);	
+	bzero(payload, payload_len);
+	
 	uint16_t bytes;
 	bytes = htons(noOfRouters);
 	
@@ -410,11 +425,11 @@ char * routing_update() {
 	bytes = htons(routers[myIndex].router_port);
 	memcpy(payload+0x02, &bytes, sizeof(bytes));
 	uint32_t fourBytes;
-	fourBytes = routers[myIndex].ip;
+	fourBytes = htonl(routers[myIndex].ip);
 	memcpy(payload+0x04, &fourBytes, sizeof(fourBytes));
 
 	for(int i = 0; i < noOfRouters; i++) {
-		fourBytes = routers[i].ip; /* no need to convert here*/
+		fourBytes = htonl(routers[i].ip); /* no need to convert here*/
 		memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i, &fourBytes, sizeof(fourBytes));
 		bytes = htons(routers[i].router_port);
 		memcpy(payload+0x08+SIZE_OF_ONE_ROUTER_ENTRY*i+0x04, &bytes, sizeof(bytes));
@@ -434,8 +449,6 @@ char * routing_update() {
 }
 
 void init_response(int sock_index) {
-        //cout << "Entering init response" << endl;
-        //LOG_PRINT("Entering init response");
         uint16_t payload_len, response_len;
         char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -452,13 +465,9 @@ void init_response(int sock_index) {
         sendALL(sock_index, cntrl_response, response_len);
 
         free(cntrl_response);
-        //cout<< "Exiting init response"<< endl;
-        //LOG_PRINT("Exiting init response");
 }
 
 void handle_crash(int sock_index) {
-	//cout << "Entering handle crash" << endl;
-	//LOG_PRINT("Entering handle crash");
 	uint16_t payload_len, response_len;
 	char *cntrl_response_header, *cntrl_response_payload, *cntrl_response;
 
@@ -475,8 +484,6 @@ void handle_crash(int sock_index) {
 	sendALL(sock_index, cntrl_response, response_len);
 
 	free(cntrl_response);
-	//cout << "Exiting handle crash" << endl;
-	//LOG_PRINT("Exiting handle crash");
 	exit(0); /* Terminate the router process */
 }
 
@@ -494,24 +501,25 @@ void routing_response(int sock_index) {
 
         response_len = CNTRL_RESP_HEADER_SIZE+payload_len;
         cntrl_response = (char*)malloc(response_len);
-
+	bzero(cntrl_response, response_len);
         /* Copy Header */
         memcpy(cntrl_response, cntrl_response_header, CNTRL_RESP_HEADER_SIZE);
         free(cntrl_response_header);
 
         /* Form payload */
         cntrl_response_payload = (char*)malloc(payload_len);
-        bzero(cntrl_response_payload, sizeof(cntrl_response_payload));
+        bzero(cntrl_response_payload, payload_len);
         for(int i = 0; i < noOfRouters; i++) {
                 uint16_t bytes;
                 bytes = htons(routers[i].ID);
                 memcpy(cntrl_response_payload+0x08*i, &bytes, sizeof(bytes));
-                bytes = htons(HopMatrix[myIndex][i]);
+
+		bytes = htons(routers[i].nexthop);
                 memcpy(cntrl_response_payload+0x04+0x08*i, &bytes, sizeof(bytes));
-                bytes = htons(DVMatrix[myIndex][i]);
+                bytes = htons(routers[i].cost);
                 memcpy(cntrl_response_payload+0x06+0x08*i, &bytes, sizeof(bytes));
-                //cout << "ID:" << routers[i].ID << "|NextHopID:" << HopMatrix[myIndex][i] << "|Cost:" << DVMatrix[myIndex][i] << endl;
-                //LOG_PRINT("ID:%d|NextHopID:%d|Cost:%d", routers[i].ID, HopMatrix[myIndex][i], DVMatrix[myIndex][i]);
+
+		//LOG_PRINT("ID:%d|Cost:%d|NextHop:%d", routers[i].ID, routers[i].cost, routers[i].nexthop);
         }
         /* Copy Payload */
         memcpy(cntrl_response+CNTRL_RESP_HEADER_SIZE, cntrl_response_payload, payload_len);
@@ -519,7 +527,6 @@ void routing_response(int sock_index) {
 
         sendALL(sock_index, cntrl_response, response_len);
         free(cntrl_response);
-        //cout << "Exiting router response" << endl;
         //LOG_PRINT("Exiting router response");
 }
 
@@ -577,10 +584,10 @@ void create_router_udp_socket() {
                 ERROR("bind() failed");
 
         router_socket = sock;
-	/*FD_SET(router_socket, &master_list);
+	FD_SET(router_socket, &master_list);
 	if(router_socket > head_fd)
 		head_fd = router_socket;
-	*/
+	
 	//LOG_PRINT("Router_socket:%d", router_socket);
 }
 

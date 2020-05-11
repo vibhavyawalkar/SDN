@@ -43,29 +43,16 @@ uint16_t CONTROL_PORT;
 uint16_t ROUTER_PORT;
 uint16_t DATA_PORT;
 
-
-
-/*
-uint16_t noOfRouters, update_interval, myRouterID;
+int main(int argc, char **argv)
+{
+    /*Start Here*/
+/*	uint16_t noOfRouters, update_interval, myRouterID;
 vector<routerInfo> routers(5);
 vector<vector<uint16_t>> DVMatrix(5, vector<uint16_t>(5,0));
 vector<vector<int>> HopMatrix(5, vector<int>(5,0));
 
 int myIndex;
 */
-
-
-int main(int argc, char **argv)
-{
-    /*Start Here*/
-	uint16_t noOfRouters, update_interval, myRouterID;
-vector<routerInfo> routers(5);
-vector<vector<uint16_t>> DVMatrix(5, vector<uint16_t>(5,0));
-vector<vector<int>> HopMatrix(5, vector<int>(5,0));
-
-int myIndex;
-
-	//logname += std::to_string(getpid());
     sscanf(argv[1], "%" SCNu16, &CONTROL_PORT);
 //	LOG_PRINT("Initialize in main");
     init(); // Initialize connection manager; This will block
